@@ -31,7 +31,7 @@ def _centroids_from_polygons(polygons):
     return centroids
 
 
-def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0):
+def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrodes"):
     """Find centroids of closed POLYLINE contours in an ASCII DXF.
 
     Rows are ordered from the top contact to the bottom contact; the bottom
@@ -46,9 +46,17 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0):
 
         polygons = []
         for e in msp.query("LWPOLYLINE"):
+            layer = getattr(e.dxf, "layer", None)
+            if layer is None:
+                continue
+
+            if str(layer).strip().lower() != layer_name.lower():
+                continue
+
             pts = np.asarray(e.get_points("xy"), dtype=float)
             if pts.size == 0:
                 continue
+            
             if len(pts) >= 2 and np.allclose(pts[0], pts[-1]):
                 pts = pts[:-1]
             if len(pts) >= 3:
