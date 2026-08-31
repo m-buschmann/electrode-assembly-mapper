@@ -1,6 +1,8 @@
 import math
 import numpy as np
 import ezdxf
+import matplotlib.pyplot as plt
+import csv
 
 
 def _centroids_from_polygons(polygons):
@@ -140,3 +142,63 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
 def print_text(ax, ch, coords):
     ax.text(coords[0], coords[1], str(ch), ha="center", va="center", color='r', fontsize=6,
             bbox=dict(boxstyle="square", ec=(0., 0., 0.), fc=(1., 1, 1)))
+
+def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=1.0):
+    """Load electrode centroids from DXF and plot them with labels.
+    
+    Args:
+        dxf_path: Path to DXF file
+        layer_name: DXF layer name containing electrodes
+        um_per_dxf_unit: Scaling factor for coordinates
+    
+    Returns:
+        xy: (n_electrodes, 2) array of electrode positions in micrometers
+    """
+    xy = read_electrode_centroids(dxf_path, um_per_dxf_unit=um_per_dxf_unit, 
+                                   layer_name=layer_name)
+    
+    fig, ax = plt.subplots(figsize=(8, 10))
+    for i, (x, y) in enumerate(xy):
+        print_text(ax, i, [x, y])
+    
+    ax.scatter(xy[:, 0], xy[:, 1], s=20, color="tab:blue", alpha=0.7)
+    ax.set_aspect("equal")
+    ax.set_title("Electrode layout centroids")
+    ax.set_xlabel("x (µm)")
+    ax.set_ylabel("y (µm)")
+    plt.show()
+    
+    return xy
+
+
+def create_channel_map(xy, csv_path):
+    """Read CSV mapping and create 3×n channel map matrix.
+    
+    Args:
+        xy: (n_electrodes, 2) array of electrode positions
+        csv_path: Path to CSV with columns: Electrode Channel, Connector Channel
+    
+    Returns:
+        channel_map: (3, n_channels) array where:
+            - row 0: x-coordinates
+            - row 1: y-coordinates
+            - row 2: PCB connector channel numbers
+    """
+    with open(csv_path, newline="") as file:
+        reader = csv.DictReader(file, delimiter=";")
+        mapping_rows = [row for row in reader 
+                       if row["Electrode Channel"].strip()]
+    
+    n_channels = len(mapping_rows)
+    channel_map = np.zeros((3, n_channels), dtype=float)
+    
+    for row in mapping_rows:
+        electrode_ch = int(row["Electrode Channel"])
+        connector_ch = int(row["Connector Channel"])
+        idx = electrode_ch - 1
+        
+        channel_map[0, idx] = xy[idx, 0]
+        channel_map[1, idx] = xy[idx, 1]
+        channel_map[2, idx] = connector_ch
+    
+    return channel_map
