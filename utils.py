@@ -202,3 +202,24 @@ def create_channel_map(xy, csv_path):
         channel_map[2, idx] = connector_ch
     
     return channel_map
+
+def export_channel_map_to_csv(channel_map, dxf_file):
+    """Export channel map to CSV with proper formatting.
+    
+    Args:
+        channel_map: (3, n_channels) array from create_channel_map()
+        dxf_file: Path to DXF file (used for naming output)
+    
+    Returns:
+        output_path: Path to the saved CSV file
+    """
+    import os
+    base_name = os.path.splitext(os.path.basename(dxf_file))[0]
+    export_file = f"{base_name}_channel_map.csv"
+    
+    np.savetxt(export_file, channel_map.T, 
+               delimiter=",", 
+               header="x_um,y_um,pcb_channel",
+               comments="",
+               fmt=['%.6f', '%.6f', '%d'])
+    return export_file
