@@ -33,7 +33,8 @@ def _centroids_from_polygons(polygons):
     return centroids
 
 
-def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrodes"):
+
+def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrodes", num_contours=None):
     """Find centroids of closed POLYLINE contours in an ASCII DXF.
 
     Rows are ordered from the top contact to the bottom contact; the bottom
@@ -42,6 +43,13 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
     # ------------------------------------------------------------
     # NEW: prefer ezdxf for modern LWPOLYLINE DXF files
     # ------------------------------------------------------------
+    def layer_matches(layer):
+        if layer_name is None:
+            return True
+        if layer is None:
+            return False
+        return str(layer).strip().lower() == str(layer_name).strip().lower()
+    
     try:
         doc = ezdxf.readfile(dxf_file)
         msp = doc.modelspace()
@@ -49,10 +57,7 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
         polygons = []
         for e in msp.query("LWPOLYLINE"):
             layer = getattr(e.dxf, "layer", None)
-            if layer is None:
-                continue
-
-            if str(layer).strip().lower() != layer_name.lower():
+            if not layer_matches(layer):
                 continue
 
             pts = np.asarray(e.get_points("xy"), dtype=float)
@@ -68,6 +73,13 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
             centroids = _centroids_from_polygons(polygons)
             order = np.argsort(-centroids[:, 1], kind="stable")
             centroids = centroids[order]
+
+            if layer_name is None and num_contours is not None:
+                centroids = centroids[:-1]  # remove the hook loop
+                num_contours = int(num_contours)
+                if num_contours > 0 and centroids.shape[0] > num_contours:
+                    centroids = centroids[-num_contours:]
+
             xy = np.round((centroids - centroids[-1]) * um_per_dxf_unit, 6)
             xy[-1] = [0.0, 0.0]
             print(f"Found {xy.shape[0]} closed contact contours.")
@@ -97,14 +109,21 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
 
     polygons = []
     current = []
+    current_layer = None
     in_poly = False
+
     i = 0
     while i < n:
-        if codes[i] == 0:
+        if codes[i] == 8:
+            current_layer = values[i]
+
+        elif codes[i] == 0:
             entity = values[i].upper()
             if entity == "POLYLINE":
                 current = []
+                current_layer = None
                 in_poly = True
+
             elif entity == "VERTEX" and in_poly:
                 x = math.nan
                 y = math.nan
@@ -119,20 +138,30 @@ def read_electrode_centroids(dxf_file, um_per_dxf_unit=1.0, layer_name="electrod
                     current.append([x, y])
                 i = j - 1
             elif entity == "SEQEND" and in_poly:
-                if len(current) >= 3:
+                if len(current) >= 3 and layer_matches(current_layer):
                     polygons.append(np.array(current, dtype=float))
                 current = []
+                current_layer = None
                 in_poly = False
         i += 1
 
+
     if not polygons:
-        raise ValueError("No POLYLINE contours were found in the DXF.")
-
+        raise ValueError(
+            f"No contour polygons were found for layer '{layer_name}' in the DXF. "
+            "If this file uses legacy POLYLINE entities, make sure the layer name matches or pass layer_name=None."
+        )
+    
     centroids = _centroids_from_polygons(polygons)
-
-    # Larger DXF Y is the top of the drawing; sort descending (stable).
     order = np.argsort(-centroids[:, 1], kind="stable")
     centroids = centroids[order]
+
+    if layer_name is None and num_contours is not None:
+        centroids = centroids[:-1]  # remove the hook loop
+        num_contours = int(num_contours)
+        if num_contours > 0 and centroids.shape[0] > num_contours:
+            centroids = centroids[-num_contours:]
+
     xy = np.round((centroids - centroids[-1]) * um_per_dxf_unit, 6)
     xy[-1] = [0.0, 0.0]
     print(f"Found {xy.shape[0]} closed contact contours.")
@@ -143,7 +172,7 @@ def print_text(ax, ch, coords):
     ax.text(coords[0], coords[1], str(ch), ha="center", va="center", color='r', fontsize=6,
             bbox=dict(boxstyle="square", ec=(0., 0., 0.), fc=(1., 1, 1)))
 
-def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=1.0):
+def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=1.0, num_contours=None):
     """Load electrode centroids from DXF and plot them with labels.
     
     Args:
@@ -155,7 +184,7 @@ def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=
         xy: (n_electrodes, 2) array of electrode positions in micrometers
     """
     xy = read_electrode_centroids(dxf_path, um_per_dxf_unit=um_per_dxf_unit, 
-                                   layer_name=layer_name)
+                                   layer_name=layer_name, num_contours=num_contours)
     
     fig, ax = plt.subplots(figsize=(8, 10))
     for i, (x, y) in enumerate(xy):
