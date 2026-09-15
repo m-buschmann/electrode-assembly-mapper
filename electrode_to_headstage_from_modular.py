@@ -47,7 +47,7 @@ def get_electrode_to_headstage_mapping(
 
 # Execution
 df_routing = get_electrode_to_headstage_mapping(
-    "modular_mappings/probe_Xiaomin.json",
+    "modular_mappings/probe_ex_1_intan256.json",
     "modular_mappings/headstage_ZD64.json",
 )
 
