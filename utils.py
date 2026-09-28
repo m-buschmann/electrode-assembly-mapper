@@ -190,7 +190,7 @@ def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=
     
     fig, ax = plt.subplots(figsize=(8, 10))
     for i, (x, y) in enumerate(xy):
-        print_text(ax, i, [x, y])
+        print_text(ax, i + 1, [x, y])
     
     ax.scatter(xy[:, 0], xy[:, 1], s=20, color="tab:blue", alpha=0.7)
     ax.set_aspect("equal")
