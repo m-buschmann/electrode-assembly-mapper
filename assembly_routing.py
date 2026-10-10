@@ -131,7 +131,20 @@ class AssemblyRouter:
 
     def load_assembly_csv(self, path: str | Path) -> None:
         with open(path, newline="", encoding="utf-8") as file:
-            for row_number, row in enumerate(csv.DictReader(file), start=2):
+            sample = file.read(4096)
+            file.seek(0)
+
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=",;")
+            except csv.Error as error:
+                raise ValueError(
+                    "Could not determine the assembly CSV delimiter; "
+                    "expected ',' or ';'."
+                ) from error
+
+            reader = csv.DictReader(file, dialect=dialect)
+
+            for row_number, row in enumerate(reader, start=2):
                 required = {
                     "source_instance",
                     "source_pin",
@@ -143,16 +156,22 @@ class AssemblyRouter:
                     raise ValueError(
                         f"Assembly CSV is missing columns: {sorted(missing)}"
                     )
+
                 try:
                     self.add_connection(
-                        make_fqn(row["source_instance"].strip(), row["source_pin"].strip()),
+                        make_fqn(
+                            row["source_instance"].strip(),
+                            row["source_pin"].strip(),
+                        ),
                         make_fqn(
                             row["destination_instance"].strip(),
                             row["destination_pin"].strip(),
                         ),
                     )
                 except (KeyError, ValueError) as error:
-                    raise ValueError(f"Invalid assembly row {row_number}: {error}") from error
+                    raise ValueError(
+                        f"Invalid assembly row {row_number}: {error}"
+                    ) from error
 
     def trace_forward(self, start_fqn: str) -> list[str]:
         """Trace one signal forward until its first unconnected pin."""
