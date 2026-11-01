@@ -204,38 +204,6 @@ def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=
     return xy
 
 
-def create_channel_map(xy, csv_path):
-    """Read CSV mapping and create 3×n channel map matrix.
-    
-    Args:
-        xy: (n_electrodes, 2) array of electrode positions
-        csv_path: Path to CSV with columns: Electrode Channel, Connector Channel
-    
-    Returns:
-        channel_map: (3, n_channels) array where:
-            - row 0: x-coordinates
-            - row 1: y-coordinates
-            - row 2: PCB connector channel numbers
-    """
-    with open(csv_path, newline="") as file:
-        reader = csv.DictReader(file, delimiter=";")
-        mapping_rows = [row for row in reader 
-                       if row["Electrode Channel"].strip()]
-    
-    n_channels = len(mapping_rows)
-    channel_map = np.zeros((3, n_channels), dtype=float)
-    
-    for row in mapping_rows:
-        electrode_ch = int(row["Electrode Channel"])
-        connector_ch = int(row["Connector Channel"])
-        idx = electrode_ch - 1
-        
-        channel_map[0, idx] = xy[idx, 0]
-        channel_map[1, idx] = xy[idx, 1]
-        channel_map[2, idx] = connector_ch
-    
-    return channel_map
-
 def export_channel_map_to_csv(channel_map, dxf_file):
     """Export 4-row channel map to CSV.
     
@@ -248,7 +216,7 @@ def export_channel_map_to_csv(channel_map, dxf_file):
         dxf_file: Path to DXF file (used for naming output)
     
     Returns:
-        output_path: Path to the saved CSV file
+        output_path: Path to the saved CSV file in the ``results`` folder
     """
     if channel_map.ndim != 2 or channel_map.shape[0] != 4:
         raise ValueError(
@@ -256,7 +224,9 @@ def export_channel_map_to_csv(channel_map, dxf_file):
         )
 
     base_name = os.path.splitext(os.path.basename(dxf_file))[0]
-    export_file = f"{base_name}_channel_map.csv"
+    output_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(output_dir, exist_ok=True)
+    export_file = os.path.join(output_dir, f"{base_name}_channel_map.csv")
 
     df = pd.DataFrame(
         channel_map.T,
@@ -313,46 +283,3 @@ def build_channel_map(
             channel_map[3, global_index] = source_instance
 
     return channel_map
-
-
-def load_mapping(json_path: str) -> dict:
-    """Loads JSON mapping and converts numeric string keys/values to native ints."""
-    with open(json_path, "r") as f:
-        data = json.load(f)
-
-    return {
-        int(k) if str(k).isdigit() else k: int(v) if str(v).isdigit() else v
-        for k, v in data["mapping"].items()
-    }
-
-
-def get_electrode_to_headstage_mapping(
-    probe_json_path: str, headstage_json_path: str
-) -> pd.DataFrame:
-    """Composes Probe and Headstage maps into a clean Electrode -> Headstage table."""
-    probe_map = load_mapping(probe_json_path)
-    headstage_map = load_mapping(headstage_json_path)
-
-    # Chain maps directly: Electrode -> PCB Pad -> Headstage Channel
-    records = [
-        {
-            "electrode_channel": electrode,
-            "headstage_channel": headstage_map.get(pcb_pad, None),
-        }
-        for electrode, pcb_pad in probe_map.items()
-    ]
-
-    df = pd.DataFrame(records)
-
-    # Sort numerically by electrode channel
-    is_numeric = df["electrode_channel"].apply(lambda x: str(x).isdigit())
-    df_sorted = pd.concat(
-        [
-            df[is_numeric]
-            .astype({"electrode_channel": int})
-            .sort_values("electrode_channel"),
-            df[~is_numeric],
-        ]
-    ).reset_index(drop=True)
-
-    return df_sorted
