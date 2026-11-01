@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import csv
 import json
 import pandas as pd
+import os
+
 
 
 def _centroids_from_polygons(polygons):
@@ -190,7 +192,7 @@ def load_and_plot_electrodes(dxf_path, layer_name="electrodes", um_per_dxf_unit=
     
     fig, ax = plt.subplots(figsize=(8, 10))
     for i, (x, y) in enumerate(xy):
-        print_text(ax, i, [x, y])
+        print_text(ax, i + 1, [x, y])
     
     ax.scatter(xy[:, 0], xy[:, 1], s=20, color="tab:blue", alpha=0.7)
     ax.set_aspect("equal")
@@ -235,24 +237,37 @@ def create_channel_map(xy, csv_path):
     return channel_map
 
 def export_channel_map_to_csv(channel_map, dxf_file):
-    """Export channel map to CSV with proper formatting.
+    """Export 4-row channel map to CSV.
     
     Args:
-        channel_map: (3, n_channels) array from create_channel_map()
+        channel_map: (4, n_channels) array where rows are:
+            - row 0: x-coordinates (µm)
+            - row 1: y-coordinates (µm)
+            - row 2: destination/pcb channel
+            - row 3: origin electrode instance ID
         dxf_file: Path to DXF file (used for naming output)
     
     Returns:
         output_path: Path to the saved CSV file
     """
-    import os
+    if channel_map.ndim != 2 or channel_map.shape[0] != 4:
+        raise ValueError(
+            "channel_map must have shape (4, n)."
+        )
+
     base_name = os.path.splitext(os.path.basename(dxf_file))[0]
     export_file = f"{base_name}_channel_map.csv"
-    
-    np.savetxt(export_file, channel_map.T, 
-               delimiter=",", 
-               header="x_um,y_um,pcb_channel",
-               comments="",
-               fmt=['%.6f', '%.6f', '%d'])
+
+    df = pd.DataFrame(
+        channel_map.T,
+        columns=["x_um", "y_um", "pcb_channel", "origin"],
+    )
+
+    if df[["x_um", "y_um", "pcb_channel", "origin"]].isna().any().any():
+        raise ValueError("Channel map contains incomplete rows.")
+
+    df.to_csv(export_file, index=False)
+
     return export_file
 
 
