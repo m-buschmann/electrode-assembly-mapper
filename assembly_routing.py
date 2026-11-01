@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import csv
 import json
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -103,9 +102,6 @@ class AssemblyRouter:
 
         definition = self.models[model_name]
         for source, destination in definition.mapping.items():
-            # REMOVED: if source == destination: continue
-            # We now route from an explicit 'in' namespace to an 'out' namespace,
-            # so pass-throughs are valid internal links.
             self.add_connection(
                 make_fqn(instance_id, f"in_{source}"),
                 make_fqn(instance_id, f"out_{destination}"),
@@ -196,48 +192,49 @@ class AssemblyRouter:
         return path
 
     def report(
-            self,
-            starts: Iterable[str],
-            terminal_categories: Iterable[str] | None = None,
-            instance_categories: dict[str, str] | None = None,
-        ) -> list[dict[str, Any]]:
-            """Return forward paths with explicit complete/incomplete status based on terminal component types."""
-            terminals = {
-                str(category).lower()
-                for category in (
-                    terminal_categories
-                    if terminal_categories is not None
-                    else ("headstage",)
-                )
-            }
+        self,
+        starts: Iterable[str],
+        terminal_categories: Iterable[str] | None = None,
+        instance_categories: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return forward paths with complete/incomplete status."""
+        terminals = {
+            str(category).lower()
+            for category in (
+                terminal_categories
+                if terminal_categories is not None
+                else ("headstage",)
+            )
+        }
 
-            report = []
+        report = []
+        for start in starts:
+            path = self.trace_forward(start)
+            destination_instance, _ = split_fqn(path[-1])
 
-            for start in starts:
-                path = self.trace_forward(start)
-                destination_instance, _ = split_fqn(path[-1])
+            if (
+                instance_categories is not None
+                and destination_instance in instance_categories
+            ):
+                category = instance_categories[destination_instance]
+            else:
+                model = self.models[self.instances[destination_instance]]
+                category = model.component_type
 
-                if (
-                    instance_categories is not None
-                    and destination_instance in instance_categories
-                ):
-                    category = instance_categories[destination_instance]
-                else:
-                    model = self.models[self.instances[destination_instance]]
-                    category = model.component_type
+            report.append(
+                {
+                    "source": start,
+                    "destination": path[-1],
+                    "status": (
+                        "complete"
+                        if str(category).lower() in terminals
+                        else "incomplete"
+                    ),
+                    "path": path,
+                }
+            )
 
-                is_complete = str(category).lower() in terminals
-
-                report.append(
-                    {
-                        "source": start,
-                        "destination": path[-1],
-                        "status": "complete" if is_complete else "incomplete",
-                        "path": path,
-                    }
-                )
-
-            return report
+        return report
 
     def validate(self) -> None:
         """Check that all stored links remain one-to-one and non-cyclic."""

@@ -271,6 +271,50 @@ def export_channel_map_to_csv(channel_map, dxf_file):
     return export_file
 
 
+def build_channel_map(
+    complete_report,
+    electrode_channel_indices,
+    electrode_offsets,
+    electrode_xy_maps,
+    total_electrodes,
+):
+    """Build a four-row channel map from completed routing paths."""
+    channel_map = np.full(
+        (4, total_electrodes),
+        None,
+        dtype=object,
+    )
+
+    for item in complete_report:
+        source_instance, source_pin = item["source"].rsplit(".", 1)
+        destination_pin = item["destination"].rsplit(".", 1)[1]
+
+        if source_pin.startswith("in_"):
+            source_pin = source_pin[3:]
+
+        if destination_pin.startswith("out_"):
+            destination_pin = destination_pin[4:]
+        elif destination_pin.startswith("in_"):
+            destination_pin = destination_pin[3:]
+
+        if source_instance not in electrode_channel_indices:
+            continue
+
+        local_contact_idx = electrode_channel_indices[source_instance][source_pin]
+        global_index = (
+            electrode_offsets[source_instance] + local_contact_idx
+        )
+        xy = electrode_xy_maps[source_instance]
+
+        if local_contact_idx < len(xy):
+            channel_map[0, global_index] = xy[local_contact_idx, 0]
+            channel_map[1, global_index] = xy[local_contact_idx, 1]
+            channel_map[2, global_index] = destination_pin
+            channel_map[3, global_index] = source_instance
+
+    return channel_map
+
+
 def load_mapping(json_path: str) -> dict:
     """Loads JSON mapping and converts numeric string keys/values to native ints."""
     with open(json_path, "r") as f:
