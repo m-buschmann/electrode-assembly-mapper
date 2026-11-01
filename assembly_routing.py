@@ -196,23 +196,37 @@ class AssemblyRouter:
             path.append(current)
         return path
 
-    def report(self, starts: Iterable[str]) -> list[dict[str, Any]]:
-        """Return forward paths with explicit complete/incomplete status."""
-        report = []
-        for start in starts:
-            path = self.trace_forward(start)
-            instance_id, _ = split_fqn(path[-1])
-            model = self.models[self.instances[instance_id]]
-            is_headstage = "headstage" in model.component_type.lower()
-            report.append(
-                {
-                    "source": start,
-                    "destination": path[-1],
-                    "status": "complete" if is_headstage else "incomplete",
-                    "path": path,
-                }
-            )
-        return report
+    def report(
+            self,
+            starts: Iterable[str],
+            terminal_categories: Iterable[str] | None = None,
+            instance_categories: dict[str, str] | None = None,
+        ) -> list[dict[str, Any]]:
+            """Return forward paths with explicit complete/incomplete status based on terminal component types."""
+            report = []
+            terminals = set(terminal_categories) if terminal_categories is not None else {"headstage"}
+            
+            for start in starts:
+                path = self.trace_forward(start)
+                dest_instance_id, _ = split_fqn(path[-1])
+                
+                # Determine component category (from mapping or definition)
+                if instance_categories and dest_instance_id in instance_categories:
+                    category = instance_categories[dest_instance_id]
+                else:
+                    model = self.models[self.instances[dest_instance_id]]
+                    category = model.component_type.lower()
+                    
+                is_complete = category.lower() in {t.lower() for t in terminals}
+                report.append(
+                    {
+                        "source": start,
+                        "destination": path[-1],
+                        "status": "complete" if is_complete else "incomplete",
+                        "path": path,
+                    }
+                )
+            return report
 
     def validate(self) -> None:
         """Check that all stored links remain one-to-one and non-cyclic."""

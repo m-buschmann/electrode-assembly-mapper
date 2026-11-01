@@ -235,10 +235,14 @@ def create_channel_map(xy, csv_path):
     return channel_map
 
 def export_channel_map_to_csv(channel_map, dxf_file):
-    """Export channel map to CSV with proper formatting.
+    """Export 4-row channel map to CSV.
     
     Args:
-        channel_map: (3, n_channels) array from create_channel_map()
+        channel_map: (4, n_channels) array where rows are:
+            - row 0: x-coordinates (µm)
+            - row 1: y-coordinates (µm)
+            - row 2: destination/pcb channel
+            - row 3: origin electrode instance ID
         dxf_file: Path to DXF file (used for naming output)
     
     Returns:
@@ -248,11 +252,23 @@ def export_channel_map_to_csv(channel_map, dxf_file):
     base_name = os.path.splitext(os.path.basename(dxf_file))[0]
     export_file = f"{base_name}_channel_map.csv"
     
-    np.savetxt(export_file, channel_map.T, 
-               delimiter=",", 
-               header="x_um,y_um,pcb_channel",
-               comments="",
-               fmt=['%.6f', '%.6f', '%d'])
+    header = "x_um,y_um,pcb_channel,origin"
+    
+    # Handle both 3-row and 4-row matrices for backwards compatibility
+    if channel_map.shape[0] == 4:
+        fmt = ['%.6f', '%.6f', '%s', '%s']
+    else:
+        header = "x_um,y_um,pcb_channel"
+        fmt = ['%.6f', '%.6f', '%s']
+
+    np.savetxt(
+        export_file,
+        channel_map.T, 
+        delimiter=",", 
+        header=header,
+        comments="",
+        fmt=fmt
+    )
     return export_file
 
 
