@@ -103,13 +103,12 @@ class AssemblyRouter:
 
         definition = self.models[model_name]
         for source, destination in definition.mapping.items():
-            # Identity mappings describe terminal/pass-through channels and do
-            # not create a self-loop in the routing graph.
-            if source == destination:
-                continue
+            # REMOVED: if source == destination: continue
+            # We now route from an explicit 'in' namespace to an 'out' namespace,
+            # so pass-throughs are valid internal links.
             self.add_connection(
-                make_fqn(instance_id, source),
-                make_fqn(instance_id, destination),
+                make_fqn(instance_id, f"in_{source}"),
+                make_fqn(instance_id, f"out_{destination}"),
             )
 
     def add_connection(self, source_fqn: str, destination_fqn: str) -> None:
@@ -161,11 +160,11 @@ class AssemblyRouter:
                     self.add_connection(
                         make_fqn(
                             row["source_instance"].strip(),
-                            row["source_pin"].strip(),
+                            f"out_{row['source_pin'].strip()}",
                         ),
                         make_fqn(
                             row["destination_instance"].strip(),
-                            row["destination_pin"].strip(),
+                            f"in_{row['destination_pin'].strip()}",
                         ),
                     )
                 except (KeyError, ValueError) as error:
