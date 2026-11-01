@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import csv
 import json
 import pandas as pd
+import os
+
 
 
 def _centroids_from_polygons(polygons):
@@ -248,27 +250,24 @@ def export_channel_map_to_csv(channel_map, dxf_file):
     Returns:
         output_path: Path to the saved CSV file
     """
-    import os
+    if channel_map.ndim != 2 or channel_map.shape[0] != 4:
+        raise ValueError(
+            "channel_map must have shape (4, n)."
+        )
+
     base_name = os.path.splitext(os.path.basename(dxf_file))[0]
     export_file = f"{base_name}_channel_map.csv"
-    
-    header = "x_um,y_um,pcb_channel,origin"
-    
-    # Handle both 3-row and 4-row matrices for backwards compatibility
-    if channel_map.shape[0] == 4:
-        fmt = ['%.6f', '%.6f', '%s', '%s']
-    else:
-        header = "x_um,y_um,pcb_channel"
-        fmt = ['%.6f', '%.6f', '%s']
 
-    np.savetxt(
-        export_file,
-        channel_map.T, 
-        delimiter=",", 
-        header=header,
-        comments="",
-        fmt=fmt
+    df = pd.DataFrame(
+        channel_map.T,
+        columns=["x_um", "y_um", "pcb_channel", "origin"],
     )
+
+    if df[["x_um", "y_um", "pcb_channel", "origin"]].isna().any().any():
+        raise ValueError("Channel map contains incomplete rows.")
+
+    df.to_csv(export_file, index=False)
+
     return export_file
 
 

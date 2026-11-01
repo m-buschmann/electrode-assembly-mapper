@@ -202,21 +202,32 @@ class AssemblyRouter:
             instance_categories: dict[str, str] | None = None,
         ) -> list[dict[str, Any]]:
             """Return forward paths with explicit complete/incomplete status based on terminal component types."""
+            terminals = {
+                str(category).lower()
+                for category in (
+                    terminal_categories
+                    if terminal_categories is not None
+                    else ("headstage",)
+                )
+            }
+
             report = []
-            terminals = set(terminal_categories) if terminal_categories is not None else {"headstage"}
-            
+
             for start in starts:
                 path = self.trace_forward(start)
-                dest_instance_id, _ = split_fqn(path[-1])
-                
-                # Determine component category (from mapping or definition)
-                if instance_categories and dest_instance_id in instance_categories:
-                    category = instance_categories[dest_instance_id]
+                destination_instance, _ = split_fqn(path[-1])
+
+                if (
+                    instance_categories is not None
+                    and destination_instance in instance_categories
+                ):
+                    category = instance_categories[destination_instance]
                 else:
-                    model = self.models[self.instances[dest_instance_id]]
-                    category = model.component_type.lower()
-                    
-                is_complete = category.lower() in {t.lower() for t in terminals}
+                    model = self.models[self.instances[destination_instance]]
+                    category = model.component_type
+
+                is_complete = str(category).lower() in terminals
+
                 report.append(
                     {
                         "source": start,
@@ -225,6 +236,7 @@ class AssemblyRouter:
                         "path": path,
                     }
                 )
+
             return report
 
     def validate(self) -> None:
