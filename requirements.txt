@@ -5,3 +5,4 @@ matplotlib
 ezdxf
 PySide6
 jupyter
+ipywidgets
