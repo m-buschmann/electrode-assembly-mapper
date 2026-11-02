@@ -1,4 +1,3 @@
-import csv
 import math
 import os
 
@@ -39,10 +38,12 @@ def read_electrode_centroids(
     layer_name="electrodes",
     num_contours=None,
 ):
-    """Find centroids of closed POLYLINE contours in an ASCII DXF.
+    """Find centroids of closed polyline contours in a DXF file.
 
-    Rows are ordered from the top contact to the bottom contact; the bottom
-    contact is translated to [0, 0]. Columns are X and Y in micrometres.
+    The primary parser uses ``ezdxf`` for LWPOLYLINE entities. If that fails,
+    the function falls back to parsing legacy ASCII POLYLINE entities.
+    Returned rows are ordered from highest to lowest centroid Y; the final
+    contact is translated to ``[0, 0]`` and coordinates are scaled to µm.
     """
 
     def layer_matches(layer):
@@ -89,7 +90,7 @@ def read_electrode_centroids(
     except Exception:
         pass
 
-    # Fall back to parsing legacy POLYLINE entities.
+    # Fall back to the legacy ASCII POLYLINE parser.
     with open(dxf_file, "r", errors="ignore") as fh:
         lines = [ln.strip() for ln in fh.read().splitlines()]
 
@@ -194,7 +195,7 @@ def load_and_plot_electrodes(
         um_per_dxf_unit: Scaling factor for coordinates
 
     Returns:
-        xy: (n_electrodes, 2) array of electrode positions in micrometers
+        xy: ``(n_contacts, 2)`` array of contact positions in micrometres.
     """
     xy = read_electrode_centroids(
         dxf_path,
@@ -218,7 +219,7 @@ def load_and_plot_electrodes(
 
 
 def export_channel_map_to_csv(channel_map, dxf_file):
-    """Export 4-row channel map to CSV.
+    """Export a four-row channel map as one row per contact.
 
     Args:
         channel_map: (4, n_channels) array where rows are:
@@ -259,7 +260,11 @@ def build_channel_map(
     electrode_xy_maps,
     total_electrodes,
 ):
-    """Build a four-row channel map from completed routing paths."""
+    """Build a four-row map from completed routes.
+
+    The output rows are X coordinate, Y coordinate, terminal pin, and source
+    electrode instance. Unmapped contacts remain ``None``.
+    """
     channel_map = np.full((4, total_electrodes), None, dtype=object)
 
     for item in complete_report:

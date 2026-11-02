@@ -16,7 +16,10 @@ from typing import Any, Iterable
 
 @dataclass(frozen=True)
 class ComponentDefinition:
-    """Reusable pin mapping for one hardware model."""
+    """Reusable local pin mapping for one hardware model.
+
+    ``mapping`` maps each component input pin to its corresponding output pin.
+    """
 
     model_name: str
     component_type: str
@@ -24,6 +27,7 @@ class ComponentDefinition:
 
     @classmethod
     def from_json(cls, path: str | Path) -> "ComponentDefinition":
+        """Load and validate a component definition from a JSON file."""
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
 
@@ -40,7 +44,7 @@ class ComponentDefinition:
         return definition
 
     def validate(self) -> None:
-        """Reject ambiguous local mappings before they enter an assembly."""
+        """Reject mappings where multiple inputs share one output pin."""
         destinations = list(self.mapping.values())
         if len(destinations) != len(set(_key(value) for value in destinations)):
             raise ValueError(
@@ -50,6 +54,7 @@ class ComponentDefinition:
 
 
 def _normalise_value(value: Any) -> Any:
+    """Convert digit-only values to integers while preserving other values."""
     text = str(value)
     return int(text) if text.isdigit() else value
 
@@ -77,7 +82,11 @@ def split_fqn(fqn: str) -> tuple[str, str]:
 
 
 class AssemblyRouter:
-    """Validate and traverse a one-to-one physical signal assembly."""
+    """Validate and traverse a one-to-one physical signal assembly.
+
+    Component mappings are stored as internal ``in_`` to ``out_`` links.
+    Assembly connections join those links using fully qualified pin names.
+    """
 
     def __init__(self) -> None:
         self.models: dict[str, ComponentDefinition] = {}
@@ -86,14 +95,17 @@ class AssemblyRouter:
         self.incoming: dict[str, str] = {}
 
     def register_model(self, definition: ComponentDefinition) -> None:
+        """Register a model definition under its unique model name."""
         if definition.model_name in self.models:
             raise ValueError(f"Duplicate component model: {definition.model_name}")
         self.models[definition.model_name] = definition
 
     def register_model_json(self, path: str | Path) -> None:
+        """Load and register one model definition from JSON."""
         self.register_model(ComponentDefinition.from_json(path))
 
     def add_instance(self, instance_id: str, model_name: str) -> None:
+        """Add an instance and create its internal mapping links."""
         if instance_id in self.instances:
             raise ValueError(f"Duplicate component instance: {instance_id}")
         if model_name not in self.models:
@@ -108,7 +120,7 @@ class AssemblyRouter:
             )
 
     def add_connection(self, source_fqn: str, destination_fqn: str) -> None:
-        """Connect two physical pins, enforcing one-to-one connectivity."""
+        """Connect two fully qualified pins with one-to-one connectivity."""
         source_instance, _ = split_fqn(source_fqn)
         destination_instance, _ = split_fqn(destination_fqn)
         if source_instance not in self.instances:
@@ -125,6 +137,7 @@ class AssemblyRouter:
         self.incoming[destination_fqn] = source_fqn
 
     def load_assembly_csv(self, path: str | Path) -> None:
+        """Load directed assembly connections from a comma- or semicolon-delimited CSV."""
         with open(path, newline="", encoding="utf-8") as file:
             sample = file.read(4096)
             file.seek(0)
@@ -169,11 +182,11 @@ class AssemblyRouter:
                     ) from error
 
     def trace_forward(self, start_fqn: str) -> list[str]:
-        """Trace one signal forward until its first unconnected pin."""
+        """Trace a signal until its first unconnected pin or a cycle."""
         return self._trace(start_fqn, self.outgoing)
 
     def trace_backward(self, end_fqn: str) -> list[str]:
-        """Trace one signal backward until its first unconnected pin."""
+        """Trace a signal backward until its first unconnected pin or a cycle."""
         return self._trace(end_fqn, self.incoming)
 
     @staticmethod
@@ -197,7 +210,11 @@ class AssemblyRouter:
         terminal_categories: Iterable[str] | None = None,
         instance_categories: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Return forward paths with complete/incomplete status."""
+        """Return each start pin's path and terminal status.
+
+        A path is ``complete`` when its final instance belongs to one of the
+        requested terminal categories; otherwise it is ``incomplete``.
+        """
         terminals = {
             str(category).lower()
             for category in (
@@ -237,7 +254,7 @@ class AssemblyRouter:
         return report
 
     def validate(self) -> None:
-        """Check that all stored links remain one-to-one and non-cyclic."""
+        """Check link-index consistency and reject routing cycles."""
         if len(self.outgoing) != len(self.incoming):
             raise ValueError("Assembly link indexes are inconsistent.")
         for source in self.outgoing:

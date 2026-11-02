@@ -1,8 +1,6 @@
 numpy
-scipy
 pandas
 matplotlib
 ezdxf
-PySide6
 jupyter
 ipywidgets
