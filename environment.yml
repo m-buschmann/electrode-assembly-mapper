@@ -1,4 +1,4 @@
-name: electrode2geometry
+name: electrode-assembly-mapper
 channels:
   - conda-forge
 dependencies:
