@@ -1,6 +1,6 @@
 {
     "component_type": "rigid_pcb",
-    "name": "pcb_64ch_008",
+    "name": "pcb_32ch_002",
     "mapping": {
         "P$1": "T2",
         "P$2": "B2",
