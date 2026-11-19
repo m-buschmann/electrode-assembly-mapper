@@ -1,6 +1,6 @@
 {
     "component_type": "rigid_pcb",
-    "name": "probe_64ch_Xiaomin",
+    "name": "pcb_64ch_Xiaomin",
     "mapping": {
         "P$64": "B8",
         "P$63": "B7",
