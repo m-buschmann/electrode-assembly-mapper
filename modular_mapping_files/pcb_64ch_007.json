@@ -1,6 +1,7 @@
 {
     "component_type": "headstage",
     "name": "pcb_64ch_007",
+    "comment": "connector pads numbered as Left 1-32 and Right 1-32 (top to bottom). GND and REF pads excluded. Same for electrode pads, with PCB see-through, not flipped",
     "mapping": {
         "R1": "R12",
         "R2": "R13",

@@ -1,6 +1,7 @@
 {
     "component_type": "rigid_pcb",
     "name": "pcb_32ch_004",
+    "comment": "connector pads numbered from top right to bottom right counterclockwise. for bottom layer, PCB was flipped.",
     "mapping": {
         "P$1": "B1",
         "P$2": "B2",
